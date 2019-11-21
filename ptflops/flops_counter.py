@@ -233,27 +233,57 @@ def bn_flops_counter_hook(module, input, output):
         batch_flops *= 2
     module.__flops__ += int(batch_flops)
 
+# def deconv_flops_counter_hook(conv_module, input, output):
+#     # Can have multiple inputs, getting the first one
+#     input = input[0]
+
+#     batch_size = input.shape[0]
+#     input_height, input_width = input.shape[2:]
+
+#     kernel_height, kernel_width = conv_module.kernel_size
+#     in_channels = conv_module.in_channels
+#     out_channels = conv_module.out_channels
+#     groups = conv_module.groups
+
+#     filters_per_channel = out_channels // groups
+#     conv_per_position_flops = kernel_height * kernel_width * in_channels * filters_per_channel
+
+#     active_elements_count = batch_size * input_height * input_width
+#     overall_conv_flops = conv_per_position_flops * active_elements_count
+#     bias_flops = 0
+#     if conv_module.bias is not None:
+#         output_height, output_width = output.shape[2:]
+#         bias_flops = out_channels * batch_size * output_height * output_height
+#     overall_flops = overall_conv_flops + bias_flops
+
+#     conv_module.__flops__ += int(overall_flops)
+
+
 def deconv_flops_counter_hook(conv_module, input, output):
     # Can have multiple inputs, getting the first one
     input = input[0]
 
     batch_size = input.shape[0]
-    input_height, input_width = input.shape[2:]
+    #input_height, input_width = input.shape[2:]
+    input_dims = list(input.shape[2:])
 
-    kernel_height, kernel_width = conv_module.kernel_size
+    #kernel_height, kernel_width = conv_module.kernel_size
+    kernel_dims = list(conv_module.kernel_size)
+
     in_channels = conv_module.in_channels
     out_channels = conv_module.out_channels
     groups = conv_module.groups
 
     filters_per_channel = out_channels // groups
-    conv_per_position_flops = kernel_height * kernel_width * in_channels * filters_per_channel
+    conv_per_position_flops = np.prod(kernel_dims) * in_channels * filters_per_channel #kernel_height * kernel_width * in_channels * filters_per_channel
 
-    active_elements_count = batch_size * input_height * input_width
+    active_elements_count = batch_size * np.prod(input_dims)#input_height * input_width
     overall_conv_flops = conv_per_position_flops * active_elements_count
     bias_flops = 0
     if conv_module.bias is not None:
-        output_height, output_width = output.shape[2:]
-        bias_flops = out_channels * batch_size * output_height * output_height
+        #output_height, output_width = output.shape[2:]
+        output_dims = list(output.shape[2:])
+        bias_flops = out_channels * batch_size * np.prod(output_dims) #output_height * output_height
     overall_flops = overall_conv_flops + bias_flops
 
     conv_module.__flops__ += int(overall_flops)
@@ -358,12 +388,17 @@ MODULES_MAPPING = {
     torch.nn.BatchNorm1d: bn_flops_counter_hook,
     torch.nn.BatchNorm2d: bn_flops_counter_hook,
     torch.nn.BatchNorm3d: bn_flops_counter_hook,
+    torch.nn.InstanceNorm1d: bn_flops_counter_hook,
+    torch.nn.InstanceNorm2d: bn_flops_counter_hook,
+    torch.nn.InstanceNorm3d: bn_flops_counter_hook,
     # FC
     torch.nn.Linear: linear_flops_counter_hook,
     # Upscale
     torch.nn.Upsample: upsample_flops_counter_hook,
     # Deconvolution
+    torch.nn.ConvTranspose1d: deconv_flops_counter_hook,
     torch.nn.ConvTranspose2d: deconv_flops_counter_hook,
+    torch.nn.ConvTranspose3d: deconv_flops_counter_hook,
 }
 
 
